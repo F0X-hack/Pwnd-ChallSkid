@@ -1,5 +1,6 @@
 # Documentation complète — Pwnd-Challenges-Skid
-<img width="2011" height="1348" alt="icon" src="https://github.com/user-attachments/assets/bbd78f1c-0d7b-4786-832a-be74dcfafdbd" />
+<img width="2011" height="1348" alt="icon" src="https://github.com/user-attachments/assets/33a0bf04-a3bf-4786-bf3d-e4872bccc863" />
+
 ## Table des matières
 
 1. [Présentation](#1-présentation)
@@ -12,9 +13,8 @@
 8. [Personnalisation](#8-personnalisation)
 9. [Installation & débogage](#9-installation--débogage)
 10. [Dépannage](#10-dépannage)
-11. [FAQ](#11-faq)
-12. [Sécurité — Avertissement légal](#12-sécurité--avertissement-légal)
-13. [Crédits](#13-crédits)
+11. [Sécurité — Avertissement légal](#11-sécurité--avertissement-légal)
+12. [Crédits](#12-crédits)
 
 ---
 
@@ -63,24 +63,22 @@ La **valeur** du cookie est libre : le serveur ne vérifie probablement que l'**
 Deux cookies de base sont également injectés :
 
 - `disclaimer = accepted` → accepte les avertissements / popups du site.
-- `PHPSESSID = 44728fag636e2c03tbdulf8prf` → identifiant de session PHP (capturé à la création du site et réutilisé tel quel).
+- `PHPSESSID = <valeur saisie>` → identifiant de session PHP, **fourni par l'utilisateur** directement dans le popup.
 
-> **Important** : si le site régénère la session et invalide ce `PHPSESSID`, l'injection pourra échouer. Cette valeur est à ajuster (voir [Personnalisation](#8-personnalisation)).
+> **Important** : la session `PHPSESSID` est saisie manuellement dans le champ prévu à cet effet. Si le site régénère la session et invalide le `PHPSESSID`, il suffit d'en coller un nouveau (voir [Débogage](#8-personnalisation)).
 
 ---
 
 ## 3. Architecture du projet
 
 ```
-skid-extension/
+Pwnd-ChallSkid/
 │
 ├── manifest.json          ← Configuration de l'extension (Manifest V3)
 ├── popup.html             ← Interface de la fenêtre popup
 ├── popup.css              ← Styles de l'interface (thème "console/hacker")
 ├── popup.js               ← Logique : construction et injection des cookies
 ├── banner.html            ← Fichier de travail / export du cadre SVG décoratif
-├── README.md              ← Présentation courte pour GitHub
-├── DOCUMENTATION.md       ← Ce document
 └── images/
     └── icon.png           ← Icône de l'extension (16, 48, 128 px)
 ```
@@ -144,10 +142,11 @@ Détail des champs :
 2. **Bannière ASCII** — le titre `Pwnd-Challenges-Skid` rendu en ASCII art, coloré en 3 parties : rouge / blanc / violet.
 3. **Logo** — `images/icon.png`, affiché à droite de la bannière.
 4. **3 boutons de mode** (`#unlock`, `#nuclear`, `#credit`).
-5. **Zone NUCLEAR** (`#nuclear-box`) — masquée par défaut, contient un champ numérique `#max-chall`.
-6. **Zone CREDIT** (`#credit-box`) — masquée par défaut, texte ASCII de remerciements.
-7. **Zone de statut** (`#status`) — message de retour visuel (succès / erreur).
-8. **Pied de page** — liens vers `guns.lol/foxhack` et `github.com/F0X-hack`.
+5. **Zone SESSION** (`#session-box`) — champ `#phpsessid` pour coller son identifiant de session PHP (toujours visible).
+6. **Zone NUCLEAR** (`#nuclear-box`) — masquée par défaut, contient un champ numérique `#max-chall`.
+7. **Zone CREDIT** (`#credit-box`) — masquée par défaut, texte ASCII de remerciements.
+8. **Zone de statut** (`#status`) — message de retour visuel (succès / erreur).
+9. **Pied de page** — liens vers `guns.lol/foxhack` et `github.com/F0X-hack`.
 
 ### Classes CSS importantes
 
@@ -158,12 +157,16 @@ Détail des champs :
 | `.status.ok` | Message vert (`#00ff66`) |
 | `.status.err` | Message rouge (`#ff4444`) |
 | `.credit` | Texte de crédit en orange (`#ffaa00`) |
+| `#session-box` | Bordure pointillée violette autour du champ PHPSESSID |
+| `#phpsessid` | Champ de saisie vert sur fond noir (style terminal) |
 
 ### Éléments exposés au JavaScript
 
 | ID | Rôle |
 |----|------|
 | `#status` | Zone de message de résultat |
+| `#session-box` | Bloc saisie de session |
+| `#phpsessid` | Champ de saisie du `PHPSESSID` |
 | `#nuclear-box` | Bloc options NUCLEAR |
 | `#credit-box` | Bloc crédit |
 | `#unlock` | Bouton mode UNLOCK ALL |
@@ -187,15 +190,6 @@ const ORIGIN = "https://www.challenges-kids.fr/";
 Ces deux constantes servent à écrire les cookies : le **nom de domaine** et l'**URL d'origine** exigés par l'API `chrome.cookies.set()`.
 
 ```js
-const baseCookies = [
-  { name: "disclaimer", value: "accepted" },
-  { name: "PHPSESSID", value: "44728fag636e2c03tbdulf8prf" }
-];
-```
-
-Cookies injectés **dans tous les modes** : validation du disclaimer et session PHP.
-
-```js
 const categories = {
   network: 5,
   web: 8,
@@ -205,9 +199,9 @@ const categories = {
 };
 ```
 
-Nombre de challenges par catégorie pour le mode `UNLOCK ALL`
+Nombre de challenges par catégorie pour le mode `UNLOCK ALL`.
 
-> **Total** : 5 + 8 + 7 + 5 + 5 = **30 cookies de challenges** + 2 cookies de base = **32 cookies** injectés.
+> **Total** : 5 + 8 + 7 + 5 + 5 = **30 cookies de challenges** + 2 cookies de base = **32 cookies** injectés (UNLOCK ALL).
 
 ### 6.2 Références au DOM
 
@@ -226,7 +220,33 @@ setStatus("Injection Successful !");        // vert
 setStatus("Erreur : ...", false);            // rouge
 ```
 
-### 6.4 `buildCookies(list)`
+### 6.4 `getSessionCookies()` — lecture du PHPSESSID
+
+```js
+function getSessionCookies() {
+  const phpsessid = document.getElementById("phpsessid").value.trim();
+  if (!phpsessid) {
+    setStatus("Mets ton PHPSESSID d'abord.", false);
+    return null;
+  }
+  return [
+    { name: "disclaimer", value: "accepted" },
+    { name: "PHPSESSID", value: phpsessid }
+  ];
+}
+```
+
+Cette fonction :
+
+1. Lit la valeur du champ `#phpsessid`.
+2. Si le champ est **vide** (ou ne contient que des espaces, grâce à `trim()`), affiche l'erreur `Mets ton PHPSESSID d'abord.` en rouge et retourne `null` (blocage de l'injection).
+3. Sinon, retourne les 2 cookies de base : `disclaimer` et `PHPSESSID` avec la valeur fournie.
+
+**Retour** :
+- `null` → l'injection est annulée (le mode n'a rien injecté).
+- `[ { name: "disclaimer", ... }, { name: "PHPSESSID", ... } ]` → les cookies de base prêts à être complétés par les cookies de challenges.
+
+### 6.5 `buildCookies(list)`
 
 Transforme une liste de cookies « simplifiés » (au format `{ name, value }`) en objets complets compatibles avec l'API Chrome.
 
@@ -245,7 +265,7 @@ Pour chaque cookie, la fonction ajoute :
 
 > La propriété `url` est **obligatoire** dans `chrome.cookies.set()` : c'est elle qui détermine le domaine et le path si le champ correspondant est absent.
 
-### 6.5 `inject(cookies)` (asynchrone)
+### 6.6 `inject(cookies)` (asynchrone)
 
 C'est la fonction d'exécution :
 
@@ -255,25 +275,25 @@ C'est la fonction d'exécution :
 4. En cas d'erreur (promise rejetée), intercepte l'exception et affiche `Erreur : <message>` en rouge.
 
 ```
-┌────────────┐     ┌──────────────────────┐     ┌─────────────┐
-│ buildCookies │ ─► │ for cookie: set()    │ ─► │ tabs.create  │
-└────────────┘     │       (await)         │     └──────┬──────┘
-                   └──────────────────────┘            ▼
-                                           "Injection Successful !"
+┌───────────────────┐    ┌──────────────────────┐    ┌─────────────┐
+│ getSessionCookies │ ─► │     buildCookies     │ ─► │  for set()  │ ─► tabs.create
+│   + challenges    │    │  (objets complets)   │    │   (await)   │
+└───────────────────┘    └──────────────────────┘    └─────────────┘
 ```
 
-### 6.6 Écouteurs d'événements
+### 6.7 Écouteurs d'événements
 
 #### UNLOCK ALL (`#unlock`)
 
-1. Copie `baseCookies`.
-2. Parcourt `categories` → pour chaque catégorie et chaque numéro de challenge, ajoute :
+1. Appelle `getSessionCookies()` → si `null` (PHPSESSID vide), **on s'arrête**.
+2. Sinon, copie les cookies de base dans `cookies`.
+3. Parcourt `categories` → pour chaque catégorie et chaque numéro de challenge, ajoute :
 
 ```js
 { name: `/network/chall1`, value: "Hacked by FoXhack" }
 ```
 
-3. Injecte le tout.
+4. Injecte le tout.
 
 #### NUCLEAR (`#nuclear`)
 
@@ -282,7 +302,8 @@ C'est la fonction d'exécution :
 3. **Second clic** (le bloc était visible) → le bloc se masque et l'injection est lancée :
    - Lit `#max-chall`.
    - Valide la saisie : doit être un nombre fini ≥ 1 (sinon « Nombre invalide. » en rouge).
-   - Génère les cookies `/network/chall1` → `/network/challN` avec `value = "Hacked by FoXhack"`.
+   - Appelle `getSessionCookies()` → si `null`, **on s'arrête**.
+   - Sinon, génère les cookies `/network/chall1` → `/network/challN` avec `value = "Hacked by FoXhack"`.
    - Injecte le tout.
 
 **Résumé du toggle** :
@@ -312,12 +333,15 @@ Débloque **30 challenges** répartis ainsi :
 | stegano | 5 | `/stegano/chall1` → `/stegano/chall5` |
 | culture | 5 | `/culture/chall1` → `/culture/chall5` |
 
+**Prérequis** : un `PHPSESSID` valide saisi dans le champ prévu.
+
 ### 7.2 NUCLEAR OPTIONS
 
 Débloque de **1 à N** challenges `network` (valeur par défaut : `301`).
 
 - Le champ accepte n'importe quel entier ≥ 1.
-- À chaque changement de valeur, il faut re-cliquer sur « NUCLEAR OPTIONS » pour l'injecter (le clic sert à la fois d'ouvrant et de déclencheur).
+- À chaque changement de valeur, il faut re-cliquer sur « NUCLEAR OPTIONS » pour l'injection (le clic sert à la fois d'ouvrant et de déclencheur).
+- Le `PHPSESSID` doit également être saisi.
 
 **Cas particuliers**
 
@@ -335,7 +359,7 @@ Affiche simplement le crédit ASCII. Actions possibles ensuite : fermer le popup
 
 ## 8. Personnalisation
 
-Toutes les modifications se font dans `popup.js` (pas besoin de recompiler, juste **recharger l'extension**).
+Toutes les modifications se font dans `popup.js` ou `popup.html` (pas besoin de recompiler, juste **recharger l'extension**).
 
 ### 8.1 Ajouter / modifier une catégorie
 
@@ -366,27 +390,12 @@ value: "Hacked by FoXhack"
 
 Remplace cette valeur dans les deux boucles et affiche ce que tu veux.
 
-### 8.4 Mettre à jour la session PHP
-
-Si l'injection du `PHPSESSID` ne suffit plus (session expirée côté serveur) :
+### 8.4 Obtenir un PHPSESSID valide
 
 1. Connecte-toi normalement sur `challenges-kids.fr`.
-2. Ouvre les DevTools → onglet **Application** → **Cookies**.
+2. Ouvre les DevTools → onglet **Application** → **Cookies** → `https://www.challenges-kids.fr`.
 3. Copie la valeur actuelle de `PHPSESSID`.
-4. Remplace la valeur dans `baseCookies` :
-
-```js
-{ name: "PHPSESSID", value: "<valeur récupérée>" }
-```
-
-### 8.5 Modifier les liens du footer
-
-Dans `popup.html`, sections `.footer a` :
-
-```html
-<a href="https://guns.lol/foxhack" ...>guns.lol/foxhack</a>
-<a href="https://github.com/F0X-hack" ...>github.com/F0X-hack</a>
-```
+4. Colle-la dans le champ `#phpsessid` du popup avant de lancer un mode.
 
 ---
 
@@ -398,7 +407,7 @@ Dans `popup.html`, sections `.footer a` :
 2. Ouvre `chrome://extensions`.
 3. Active le **mode développeur** (coin haut-droit).
 4. Clique sur **Charger l'extension non empaquetée**.
-5. Sélectionne le dossier `skid-extension/`.
+5. Sélectionne le dossier `Pwnd-ChallSkid/`.
 6. Épingle l'extension dans la barre d'outils si besoin.
 
 ### Recharger après une modification
@@ -422,46 +431,28 @@ Après chaque modification d'un fichier, rends-toi sur `chrome://extensions` et 
 
 | Problème | Cause probable | Solution |
 |----------|----------------|----------|
+| « Mets ton PHPSESSID d'abord. » | Champ `#phpsessid` vide | Renseigner un PHPSESSID valide |
+| « Nombre invalide. » | Saisie 0, vide, négative ou non numérique | Saisir un entier ≥ 1 |
 | « Erreur : ... » dans le popup | Permission cookies non active ou domaine bloqué | Vérifier que les `host_permissions` couvrent le domaine exact (avec `www`) |
-| Les challenges restent verrouillés | `PHPSESSID` expiré côté serveur | Récupérer une session fraîche (voir [8.4](#84-mettre-à-jour-la-session-php)) |
+| Les challenges restent verrouillés | `PHPSESSID` expiré côté serveur | Récupérer une session fraîche (voir [8.4](#84-obtenir-un-phpsessid-valide)) |
 | Le site redirige vers la racine sans `www` | Cookies posés sur `www.*` uniquement | Vérifier que la redirection du site garde le domaine `www` ; sinon ajouter le domaine racine à `host_permissions` |
 | Rien ne se passe au clic | Extension non rechargée après modification | Recharger l'extension sur `chrome://extensions` |
 | Popup blanc | Erreur JS dans `popup.js` | Inspecter le popup, corriger l'erreur |
-| Le champ NUCLEAR refuse une valeur | Saisie 0, vide, négative ou non numérique | Saisir un entier ≥ 1 |
+| Champ NUCLEAR refuse une valeur | Saisie 0, vide ou négative | Saisir un entier ≥ 1 |
 
 ---
 
-## 11. FAQ
 
-**Q : L'extension crée un onglet à chaque clic ?**
-R : Oui. `inject()` ouvre toujours un nouvel onglet vers le site après l'injection, quel que soit le mode.
-
-**Q : Peut-on débloquer plus de challenges qu'il n'en existe ?**
-R : Oui techniquement. L'extension pose les cookies qu'on lui demande ; le nombre n'est pas limité par le site. Les cookies excédentaires seront simplement ignorés.
-
-**Q : Faut-il une connexion Internet pour le popup ?**
-R : Le popup s'affiche hors ligne. L'injection nécessite uniquement un accès au domaine pour appliquer ses cookies (et ouvrir l'onglet).
-
-**Q : Pourquoi de l'ASCII art ?**
-R : Le thème « console / hacker » est un parti pris esthétique du projet.
-
-**Q : L'extension fonctionne-t-elle sur les autres navigateurs (Firefox, Edge) ?**
-R : L'API `chrome.cookies` et le Manifest V3 existent sur Edge (compatible Chrome). Firefox utilise des API proches mais le manifest peut nécessiter des ajustements (`browser_specific_settings`).
-
-**Q : Pourquoi il n'y a pas de `background.js` ?**
-R : Toute la logique tient dans le popup. Aucune tâche en arrière-plan n'est nécessaire : on clique, on injecte, c'est tout.
-
----
-
-## 12. Sécurité — Avertissement légal
+## 11. Sécurité — Avertissement légal
 
 - **Ce projet est fourni à des fins strictement éducatives**, pour comprendre comment fonctionnent les cookies et l'API d'une extension Chrome.
 - L'auteur **n'est pas responsable** de l'utilisation faite de cet outil.
 - Débloquer des challenges peut violer les **règles du site** ou de la plateforme. Utilise-le uniquement sur des environnements autorisés.
-- Le `PHPSESSID` contenu dans le code est une session capturée lors de la création de ce projet. Ne pas la partager / la réutiliser publiquement pour un usage réel.
+  
 
-## 13. Crédits
+## 12. Crédits
 
 - **Script By** FoXhack
 - **Research By** FoXhack & J202
 - Links : [guns.lol/foxhack](https://guns.lol/foxhack) · [github.com/F0X-hack](https://github.com/F0X-hack)
+
