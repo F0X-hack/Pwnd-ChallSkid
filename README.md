@@ -1,5 +1,5 @@
 # Documentation complète — Pwnd-Challenges-Skid
-
+<img width="2011" height="1348" alt="icon" src="https://github.com/user-attachments/assets/bbd78f1c-0d7b-4786-832a-be74dcfafdbd" />
 ## Table des matières
 
 1. [Présentation](#1-présentation)
